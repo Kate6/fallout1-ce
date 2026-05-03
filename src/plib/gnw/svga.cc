@@ -98,10 +98,19 @@ bool svga_init(VideoOptions* video_options)
         windowFlags |= SDL_WINDOW_FULLSCREEN;
     }
 
+    // On Android in fullscreen, use 0x0 to use full display resolution
+    // Otherwise use the configured width/height
+    int windowW = video_options->width * video_options->scale;
+    int windowH = video_options->height * video_options->scale;
+#if __ANDROID__
+    if (video_options->fullscreen) {
+        windowW = 0;
+        windowH = 0;
+    }
+#endif
+
     gSdlWindow = SDL_CreateWindow(GNW95_title, SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED,
-        video_options->width * video_options->scale,
-        video_options->height * video_options->scale,
-        windowFlags);
+        windowW, windowH, windowFlags);
     if (gSdlWindow == NULL) {
         return false;
     }
