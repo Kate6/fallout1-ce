@@ -10,6 +10,7 @@ typedef enum MovieFlags {
     MOVIE_FLAG_0x02 = 0x02,
     MOVIE_FLAG_0x04 = 0x04,
     MOVIE_FLAG_0x08 = 0x08,
+    MOVIE_FLAG_VIDEO_SCALE = 0x10,
 } MovieFlags;
 
 typedef enum MovieExtendedFlags {

@@ -138,6 +138,9 @@ static int lastMovieSY;
 // 0x6373AC
 static int movieScaleFlag;
 
+// 0x6373AC
+static int movieVideoScaleFlag;
+
 // 0x6373B0
 static MoviePreDrawFunc* preDrawFunc;
 
@@ -263,7 +266,14 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
 
     SDL_Rect destRect;
 
-    if (movieScaleFlag) {
+    // Handle video scaling to fill the window
+    if (movieVideoScaleFlag) {
+        // Scale video to fill the entire window
+        destRect.x = 0;
+        destRect.y = 0;
+        destRect.w = v15;
+        destRect.h = winRect.lry - winRect.uly + 1;
+    } else if (movieScaleFlag) {
         if ((movieFlags & MOVIE_EXTENDED_FLAG_0x08) != 0) {
             destRect.y = (winRect.lry - winRect.uly + 1 - destHeight) / 2;
             destRect.x = (v15 - 4 * srcWidth / 3) / 2;
@@ -314,7 +324,11 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
     }
 
     SDL_SetSurfacePalette(surface, gSdlSurface->format->palette);
-    SDL_BlitSurface(surface, &srcRect, gSdlSurface, &destRect);
+    if (movieVideoScaleFlag) {
+        SDL_BlitScaled(surface, &srcRect, gSdlSurface, &destRect);
+    } else {
+        SDL_BlitSurface(surface, &srcRect, gSdlSurface, &destRect);
+    }
     SDL_BlitSurface(gSdlSurface, NULL, gSdlTextureSurface, NULL);
     renderPresent();
 }
@@ -621,6 +635,12 @@ int movieSetFlags(int flags)
         movieFlags |= MOVIE_EXTENDED_FLAG_0x10;
     } else {
         movieFlags &= ~MOVIE_EXTENDED_FLAG_0x10;
+    }
+
+    if ((flags & MOVIE_FLAG_VIDEO_SCALE) != 0) {
+        movieVideoScaleFlag = 1;
+    } else {
+        movieVideoScaleFlag = 0;
     }
 
     return 0;

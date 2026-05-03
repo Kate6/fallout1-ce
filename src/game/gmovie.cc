@@ -1,4 +1,5 @@
 #include "game/gmovie.h"
+#include "int/movie.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -145,6 +146,21 @@ int gmovie_play(int game_movie, int game_movie_flags)
     }
 
     int movie_flags = 4;
+
+    // Read MOVIE_SIZE from f1_res.ini and set video scaling flag
+    Config resolutionConfig;
+    if (config_init(&resolutionConfig)) {
+        if (config_load(&resolutionConfig, "f1_res.ini", false)) {
+            int movieSize;
+            if (config_get_value(&resolutionConfig, "MOVIES", "MOVIE_SIZE", &movieSize)) {
+                // MOVIE_SIZE=2 means stretch to fill the screen
+                if (movieSize == 2) {
+                    movie_flags |= MOVIE_FLAG_VIDEO_SCALE;
+                }
+            }
+        }
+        config_exit(&resolutionConfig);
+    }
 
     if (subtitlesEnabled) {
         char* subtitlesFilePath = gmovie_subtitle_func(movieFilePath);
