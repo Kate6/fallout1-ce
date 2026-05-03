@@ -248,6 +248,11 @@ void handleWindowSizeChanged()
     createRenderer(screenGetWidth(), screenGetHeight());
 }
 
+void setLogicalSize(int width, int height)
+{
+    SDL_RenderSetLogicalSize(gSdlRenderer, width, height);
+}
+
 void renderPresent()
 {
     SDL_UpdateTexture(gSdlTexture, NULL, gSdlTextureSurface->pixels, gSdlTextureSurface->pitch);

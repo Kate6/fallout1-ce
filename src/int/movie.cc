@@ -268,11 +268,15 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
 
     // Handle video scaling to fill the window
     if (movieVideoScaleFlag) {
-        // Scale video to fill the entire window
+        // Temporarily change logical size to window dimensions
+        int windowW = winRect.lrx - winRect.ulx + 1;
+        int windowH = winRect.lry - winRect.uly + 1;
+        SDL_RenderSetLogicalSize(gSdlRenderer, windowW, windowH);
+        
         destRect.x = 0;
         destRect.y = 0;
-        destRect.w = v15;
-        destRect.h = winRect.lry - winRect.uly + 1;
+        destRect.w = windowW;
+        destRect.h = windowH;
     } else if (movieScaleFlag) {
         if ((movieFlags & MOVIE_EXTENDED_FLAG_0x08) != 0) {
             destRect.y = (winRect.lry - winRect.uly + 1 - destHeight) / 2;
