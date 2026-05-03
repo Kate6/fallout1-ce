@@ -60,8 +60,8 @@ import java.util.Locale;
 public class SDLActivity extends Activity implements View.OnSystemUiVisibilityChangeListener {
     private static final String TAG = "SDL";
     private static final int SDL_MAJOR_VERSION = 2;
-    private static final int SDL_MINOR_VERSION = 26;
-    private static final int SDL_MICRO_VERSION = 1;
+    private static final int SDL_MINOR_VERSION = 30;
+    private static final int SDL_MICRO_VERSION = 9;
 /*
     // Display InputType.SOURCE/CLASS of events and devices
     //
@@ -281,7 +281,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     // Load the .so
     public void loadLibraries() {
        for (String lib : getLibraries()) {
-          SDL.loadLibrary(lib);
+          SDL.loadLibrary(lib, this);
        }
     }
 
@@ -393,7 +393,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         mHIDDeviceManager = HIDDeviceManager.acquire(this);
 
         // Set up the surface
-        mSurface = createSDLSurface(getApplication());
+        mSurface = createSDLSurface(this);
 
         mLayout = new RelativeLayout(this);
         mLayout.addView(mSurface);
@@ -582,6 +582,7 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
     @Override
     protected void onDestroy() {
         Log.v(TAG, "onDestroy()");
+        SDLAudioManager.release(this);
 
         if (mHIDDeviceManager != null) {
             HIDDeviceManager.release(mHIDDeviceManager);
@@ -2002,6 +2003,18 @@ class SDLInputConnection extends BaseInputConnection {
 
     @Override
     public boolean deleteSurroundingText(int beforeLength, int afterLength) {
+        if (Build.VERSION.SDK_INT <= 29 /* Android 10.0 (Q) */) {
+            // Workaround to capture backspace key. Ref: http://stackoverflow.com/questions/14560344/android-backspace-in-webview-baseinputconnection
+            // and https://bugzilla.libsdl.org/show_bug.cgi?id=2265
+            if (beforeLength > 0 && afterLength == 0) {
+                // backspace(s)
+                while (beforeLength-- > 0) {
+                    nativeGenerateScancodeForUnichar('\b');
+                }
+                return true;
+            }
+        }
+
         if (!super.deleteSurroundingText(beforeLength, afterLength)) {
             return false;
         }

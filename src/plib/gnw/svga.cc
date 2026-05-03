@@ -82,7 +82,11 @@ void GNW95_ShowRect(unsigned char* src, unsigned int srcPitch, unsigned int a3, 
 
 bool svga_init(VideoOptions* video_options)
 {
+    // Set rendering hints BEFORE creating the window and renderer
     SDL_SetHint(SDL_HINT_RENDER_DRIVER, "opengl");
+    SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY, "best");
+    // Ensure proper aspect ratio preserving scaling
+    SDL_SetHint(SDL_HINT_RENDER_LOGICAL_SIZE_MODE, "aspect");
 
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) {
         return false;
@@ -187,6 +191,9 @@ static bool createRenderer(int width, int height)
     if (gSdlTexture == NULL) {
         return false;
     }
+
+    // Set texture scale mode to linear for better quality during scaling
+    SDL_SetTextureScaleMode(gSdlTexture, SDL_ScaleModeLinear);
 
     Uint32 format;
     if (SDL_QueryTexture(gSdlTexture, &format, NULL, NULL, NULL) != 0) {

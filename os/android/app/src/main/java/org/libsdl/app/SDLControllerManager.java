@@ -15,23 +15,34 @@ import android.view.KeyEvent;
 import android.view.MotionEvent;
 import android.view.View;
 
+import androidx.annotation.Keep;
 
+@Keep
 public class SDLControllerManager
 {
 
+    @Keep
     public static native int nativeSetupJNI();
 
+    @Keep
     public static native int nativeAddJoystick(int device_id, String name, String desc,
                                                int vendor_id, int product_id,
                                                boolean is_accelerometer, int button_mask,
-                                               int naxes, int nhats, int nballs);
+                                               int naxes, int axis_mask, int nhats, int nballs);
+    @Keep
     public static native int nativeRemoveJoystick(int device_id);
+    @Keep
     public static native int nativeAddHaptic(int device_id, String name);
+    @Keep
     public static native int nativeRemoveHaptic(int device_id);
+    @Keep
     public static native int onNativePadDown(int device_id, int keycode);
+    @Keep
     public static native int onNativePadUp(int device_id, int keycode);
+    @Keep
     public static native void onNativeJoy(int device_id, int axis,
                                           float value);
+    @Keep
     public static native void onNativeHat(int device_id, int hat_id,
                                           int x, int y);
 
@@ -210,7 +221,7 @@ class SDLJoystickHandler_API16 extends SDLJoystickHandler {
                     mJoysticks.add(joystick);
                     SDLControllerManager.nativeAddJoystick(joystick.device_id, joystick.name, joystick.desc,
                             getVendorId(joystickDevice), getProductId(joystickDevice), false,
-                            getButtonMask(joystickDevice), joystick.axes.size(), joystick.hats.size()/2, 0);
+                            getButtonMask(joystickDevice), joystick.axes.size(), 0, joystick.hats.size()/2, 0);
                 }
             }
         }
