@@ -98,14 +98,21 @@ bool svga_init(VideoOptions* video_options)
         windowFlags |= SDL_WINDOW_FULLSCREEN;
     }
 
-    // On Android in fullscreen, use 0x0 to use full display resolution
-    // Otherwise use the configured width/height
+    // Determine window size
     int windowW = video_options->width * video_options->scale;
     int windowH = video_options->height * video_options->scale;
+
+    // On Android, get the actual display size for fullscreen
 #if __ANDROID__
     if (video_options->fullscreen) {
-        windowW = 0;
-        windowH = 0;
+        SDL_DisplayMode mode;
+        if (SDL_GetDesktopDisplayMode(0, &mode) == 0) {
+            windowW = mode.w;
+            windowH = mode.h;
+        } else {
+            windowW = 0;
+            windowH = 0;
+        }
     }
 #endif
 
