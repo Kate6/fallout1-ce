@@ -2,6 +2,13 @@
 
 #include <string.h>
 
+#ifdef __ANDROID__
+#include <android/log.h>
+#define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FALLOUT", __VA_ARGS__)
+#else
+#define LOGD(...) printf(__VA_ARGS__)
+#endif
+
 #include <SDL.h>
 
 #include "game/gconfig.h"
@@ -53,6 +60,13 @@ static void doSubtitle();
 static int movieStart(int win, char* filePath, int (*a3)());
 static bool localMovieCallback();
 static int stepMovie();
+
+// Forward declarations for manual scaling functions
+static void manualScaleBilinear(unsigned char* src, int srcW, int srcH, int srcPitch,
+                                  unsigned char* dst, int dstW, int dstH, int dstPitch,
+                                  SDL_Palette* palette);
+static void manualScaleNearest(unsigned char* src, int srcW, int srcH, int srcPitch,
+                              unsigned char* dst, int dstW, int dstH, int dstPitch);
 
 // 0x505B30
 static int GNWWin = -1;
@@ -267,17 +281,16 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
     SDL_Rect destRect;
 
     // Handle video scaling to fill the window
-    if (movieVideoScaleFlag) {
-        // Temporarily change logical size to window dimensions
-        int windowW = winRect.lrx - winRect.ulx + 1;
-        int windowH = winRect.lry - winRect.uly + 1;
-        SDL_RenderSetLogicalSize(gSdlRenderer, windowW, windowH);
-        
-        destRect.x = 0;
-        destRect.y = 0;
-        destRect.w = windowW;
-        destRect.h = windowH;
-    } else if (movieScaleFlag) {
+ LOGD("movie_MVE_ShowFrame: movieVideoScaleFlag=%d, movieScaleFlag=%d\n", movieVideoScaleFlag, movieScaleFlag);
+ if (movieVideoScaleFlag) {
+ LOGD("Setting up fullscreen scaling: gSdlSurface=%dx%d\n", gSdlSurface->w, gSdlSurface->h);
+ // Scale video to fill the ENTIRE screen (0,0 to screen dimensions)
+ destRect.x = 0;
+ destRect.y = 0;
+ destRect.w = gSdlSurface->w;
+ destRect.h = gSdlSurface->h;
+ LOGD("destRect set to fullscreen: x=%d, y=%d, w=%d, h=%d\n", destRect.x, destRect.y, destRect.w, destRect.h);
+ } else if (movieScaleFlag) {
         if ((movieFlags & MOVIE_EXTENDED_FLAG_0x08) != 0) {
             destRect.y = (winRect.lry - winRect.uly + 1 - destHeight) / 2;
             destRect.x = (v15 - 4 * srcWidth / 3) / 2;
@@ -310,8 +323,11 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
     lastMovieBW = srcWidth;
     lastMovieH = destRect.h;
 
-    destRect.x += winRect.ulx;
-    destRect.y += winRect.uly;
+    // Don't add window offsets when using fullscreen video scaling
+    if (!movieVideoScaleFlag) {
+        destRect.x += winRect.ulx;
+        destRect.y += winRect.uly;
+    }
 
     if (movieCaptureFrameFunc != NULL) {
         if (SDL_LockSurface(surface) == 0) {
@@ -328,19 +344,86 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
     }
 
     SDL_SetSurfacePalette(surface, gSdlSurface->format->palette);
-    if (movieVideoScaleFlag) {
-        SDL_BlitScaled(surface, &srcRect, gSdlSurface, &destRect);
-    } else {
-        SDL_BlitSurface(surface, &srcRect, gSdlSurface, &destRect);
+    LOGD("About to render: movieVideoScaleFlag=%d, surface=%p, gSdlSurface=%p\n", movieVideoScaleFlag, surface, gSdlSurface);
+    LOGD("Surface details: surface->w=%d, surface->h=%d, surface->pitch=%d, format=%d\n", surface->w, surface->h, surface->pitch, surface->format->format);
+    LOGD("gSdlSurface details: gSdlSurface->w=%d, gSdlSurface->h=%d, gSdlSurface->pitch=%d, format=%d\n", gSdlSurface->w, gSdlSurface->h, gSdlSurface->pitch, gSdlSurface->format->format);
+    
+    // Check if video surface has a palette and what colors it contains
+    if (surface->format->palette && surface->format->palette->ncolors > 0) {
+        SDL_Color* colors = surface->format->palette->colors;
+        LOGD("Video palette has %d colors, checking first few:\n", surface->format->palette->ncolors);
+        LOGD("  Color 0: r=%d, g=%d, b=%d\n", colors[0].r, colors[0].g, colors[0].b);
+        LOGD("  Color 1: r=%d, g=%d, b=%d\n", colors[1].r, colors[1].g, colors[1].b);
+        LOGD("  Color 10: r=%d, g=%d, b=%d\n", colors[10].r, colors[10].g, colors[10].b);
     }
-    SDL_BlitSurface(gSdlSurface, NULL, gSdlTextureSurface, NULL);
+    
+    // Check if gSdlSurface has a palette
+    if (gSdlSurface->format->palette && gSdlSurface->format->palette->ncolors > 0) {
+        SDL_Color* colors = gSdlSurface->format->palette->colors;
+        LOGD("gSdlSurface palette has %d colors, checking first few:\n", gSdlSurface->format->palette->ncolors);
+        LOGD("  Color 0: r=%d, g=%d, b=%d\n", colors[0].r, colors[0].g, colors[0].b);
+        LOGD("  Color 1: r=%d, g=%d, b=%d\n", colors[1].r, colors[1].g, colors[1].b);
+    }
+    
+    // Apply video's palette to gSdlSurface so indices map to correct colors
+    if (surface->format->palette && gSdlSurface->format->palette) {
+        LOGD("Copying video palette to gSdlSurface\n");
+        SDL_SetPaletteColors(gSdlSurface->format->palette, surface->format->palette->colors, 0, surface->format->palette->ncolors);
+    }
+    
+    if (movieVideoScaleFlag) {
+        LOGD("Using manual scaling for video\n");
+        LOGD("srcRect: x=%d, y=%d, w=%d, h=%d\n", srcRect.x, srcRect.y, srcRect.w, srcRect.h);
+        LOGD("destRect: x=%d, y=%d, w=%d, h=%d\n", destRect.x, destRect.y, destRect.w, destRect.h);
+        
+        // Scale directly into gSdlSurface using video's palette
+        if (SDL_LockSurface(surface) == 0) {
+            unsigned char* srcPixels = (unsigned char*)surface->pixels + srcRect.y * surface->pitch + srcRect.x;
+            unsigned char* dstPixels = (unsigned char*)gSdlSurface->pixels + destRect.y * gSdlSurface->pitch + destRect.x;
+            
+            // Scale to temp buffer first
+            unsigned char* tempBuf = (unsigned char*)malloc(destRect.w * destRect.h);
+            if (tempBuf) {
+                manualScaleNearest(srcPixels, srcRect.w, srcRect.h, surface->pitch,
+                                 tempBuf, destRect.w, destRect.h, destRect.w);
+                
+                // Copy scaled data to destination with correct pitch
+                for (int y = 0; y < destRect.h; y++) {
+                    memcpy(dstPixels + y * gSdlSurface->pitch, tempBuf + y * destRect.w, destRect.w);
+                }
+                free(tempBuf);
+                LOGD("Manual scaling completed\n");
+            } else {
+                LOGD("Failed to allocate temp buffer\n");
+            }
+            
+            SDL_UnlockSurface(surface);
+        } else {
+            LOGD("Failed to lock surface for manual scaling\n");
+        }
+    } else {
+        LOGD("Using SDL_BlitSurface for normal rendering\n");
+        int blitResult = SDL_BlitSurface(surface, &srcRect, gSdlSurface, &destRect);
+        LOGD("SDL_BlitSurface result: %d\n", blitResult);
+        if (blitResult < 0) {
+            LOGD("SDL_BlitSurface error: %s\n", SDL_GetError());
+        }
+    }
+    LOGD("Copying gSdlSurface to gSdlTextureSurface\n");
+    // Blit entire gSdlSurface to texture (no src rect = entire surface)
+    SDL_Rect fullDest = {0, 0, gSdlSurface->w, gSdlSurface->h};
+    SDL_BlitSurface(gSdlSurface, NULL, gSdlTextureSurface, &fullDest);
+    LOGD("Calling renderPresent()\n");
     renderPresent();
 }
 
 // 0x478710
 static void movieShowFrame(SDL_Surface* a1, int a2, int a3, int a4, int a5, int a6, int a7, int a8, int a9)
 {
+    LOGD("movieShowFrame: GNWWin=%d, movieAlphaFlag=%d, movieScaleFlag=%d, movieSubRectFlag=%d\n", 
+                GNWWin, movieAlphaFlag, movieScaleFlag, movieSubRectFlag);
     if (GNWWin == -1) {
+        LOGD("movieShowFrame: GNWWin is -1, returning\n");
         return;
     }
 
@@ -354,7 +437,11 @@ static void movieShowFrame(SDL_Surface* a1, int a2, int a3, int a4, int a5, int 
     lastMovieSX = a4;
     lastMovieSY = a5;
 
+    LOGD("movieShowFrame: Surface a1=%p, w=%d, h=%d, pixels=%p\n", a1, a2, a3, a1->pixels);
+    LOGD("movieShowFrame: First pixel byte=0x%02x\n", *((unsigned char*)a1->pixels));
+
     if (SDL_LockSurface(a1) != 0) {
+        LOGD("movieShowFrame: Could not lock surface\n");
         return;
     }
 
@@ -365,17 +452,23 @@ static void movieShowFrame(SDL_Surface* a1, int a2, int a3, int a4, int a5, int 
     if (movieFrameGrabFunc != NULL) {
         movieFrameGrabFunc(static_cast<unsigned char*>(a1->pixels), a2, a3, a1->pitch);
     } else {
+        LOGD("movieShowFrame: Using blit function %p\n", showFrameFuncs[movieAlphaFlag][movieScaleFlag][movieSubRectFlag]);
         MovieBlitFunc* func = showFrameFuncs[movieAlphaFlag][movieScaleFlag][movieSubRectFlag];
         if (func(GNWWin, static_cast<unsigned char*>(a1->pixels), a2, a3, a1->pitch) != 0) {
+            LOGD("movieShowFrame: Blit succeeded, calling preDrawFunc and win_draw_rect\n");
             if (preDrawFunc != NULL) {
                 preDrawFunc(GNWWin, &movieRect);
             }
 
             win_draw_rect(GNWWin, &movieRect);
+        } else {
+            LOGD("movieShowFrame: Blit failed\n");
         }
     }
 
     SDL_UnlockSurface(a1);
+    LOGD("movieShowFrame: Surface unlocked, calling renderPresent\n");
+    renderPresent();
 }
 
 // 0x4788A8
@@ -582,6 +675,7 @@ static void cleanupMovie(int a1)
     movieSubRectFlag = 0;
     movieScaleFlag = 0;
     movieAlphaFlag = 0;
+    movieVideoScaleFlag = 0;
     movieFlags = 0;
     GNWWin = -1;
 }
@@ -608,13 +702,18 @@ void movieStop()
 // 0x478F74
 int movieSetFlags(int flags)
 {
+    LOGD("movieSetFlags called with flags=0x%x, current movieFlags=0x%x\n", flags, movieFlags);
     if ((flags & MOVIE_FLAG_0x04) != 0) {
+        LOGD("Setting MOVIE_EXTENDED_FLAG_0x04 and 0x08 due to MOVIE_FLAG_0x04\n");
         movieFlags |= MOVIE_EXTENDED_FLAG_0x04 | MOVIE_EXTENDED_FLAG_0x08;
     } else {
+        LOGD("Clearing MOVIE_EXTENDED_FLAG_0x08\n");
         movieFlags &= ~MOVIE_EXTENDED_FLAG_0x08;
         if ((flags & MOVIE_FLAG_0x02) != 0) {
+            LOGD("Setting MOVIE_EXTENDED_FLAG_0x04 due to MOVIE_FLAG_0x02\n");
             movieFlags |= MOVIE_EXTENDED_FLAG_0x04;
         } else {
+            LOGD("Clearing MOVIE_EXTENDED_FLAG_0x04\n");
             movieFlags &= ~MOVIE_EXTENDED_FLAG_0x04;
         }
     }
@@ -642,8 +741,10 @@ int movieSetFlags(int flags)
     }
 
     if ((flags & MOVIE_FLAG_VIDEO_SCALE) != 0) {
+        LOGD("Setting movieVideoScaleFlag to 1 (scaling enabled)\n");
         movieVideoScaleFlag = 1;
     } else {
+        LOGD("Setting movieVideoScaleFlag to 0 (scaling disabled)\n");
         movieVideoScaleFlag = 0;
     }
 
@@ -860,9 +961,10 @@ static int movieStart(int win, char* filePath, int (*a3)())
     }
 
     if ((movieFlags & MOVIE_EXTENDED_FLAG_0x04) != 0) {
-        debug_printf("Direct ");
+        LOGD("Direct rendering path selected (movieFlags & 0x04 = %d)\n", movieFlags & MOVIE_EXTENDED_FLAG_0x04);
+        LOGD("Direct ");
         win_get_rect(GNWWin, &winRect);
-        debug_printf("Playing at (%d, %d)  ", movieX + winRect.ulx, movieY + winRect.uly);
+        LOGD("Playing at (%d, %d)  ", movieX + winRect.ulx, movieY + winRect.uly);
         _MVE_rmCallbacks(a3);
         _MVE_sfCallbacks(movie_MVE_ShowFrame);
 
@@ -870,7 +972,8 @@ static int movieStart(int win, char* filePath, int (*a3)())
         v16 = movieY + winRect.uly;
         v15 = movieX + winRect.ulx;
     } else {
-        debug_printf("Buffered ");
+        LOGD("Buffered rendering path selected (movieFlags & 0x04 = %d)\n", movieFlags & MOVIE_EXTENDED_FLAG_0x04);
+        LOGD("Buffered ");
         _MVE_rmCallbacks(a3);
         _MVE_sfCallbacks(movieShowFrame);
         v17 = 0;
@@ -918,9 +1021,74 @@ static int movieStart(int win, char* filePath, int (*a3)())
     return 0;
 }
 
+// Manual bilinear scaling function for video frames
+static void manualScaleBilinear(unsigned char* src, int srcW, int srcH, int srcPitch,
+                                  unsigned char* dst, int dstW, int dstH, int dstPitch,
+                                  SDL_Palette* palette)
+{
+    LOGD("manualScaleBilinear: %dx%d -> %dx%d\n", srcW, srcH, dstW, dstH);
+    
+    float scaleX = (float)srcW / dstW;
+    float scaleY = (float)srcH / dstH;
+    
+    for (int y = 0; y < dstH; y++) {
+        float srcY = y * scaleY;
+        int y0 = (int)srcY;
+        int y1 = (y0 < srcH - 1) ? y0 + 1 : y0;
+        float yFrac = srcY - y0;
+        
+        for (int x = 0; x < dstW; x++) {
+            float srcX = x * scaleX;
+            int x0 = (int)srcX;
+            int x1 = (x0 < srcW - 1) ? x0 + 1 : x0;
+            float xFrac = srcX - x0;
+            
+            // Get 4 corner pixels (palette indices)
+            unsigned char p00 = src[y0 * srcPitch + x0];
+            unsigned char p10 = src[y0 * srcPitch + x1];
+            unsigned char p01 = src[y1 * srcPitch + x0];
+            unsigned char p11 = src[y1 * srcPitch + x1];
+            
+            // Bilinear interpolation on palette indices (not ideal but simple)
+            float interpolated = p00 * (1-xFrac) * (1-yFrac) +
+                                p10 * xFrac * (1-yFrac) +
+                                p01 * (1-xFrac) * yFrac +
+                                p11 * xFrac * yFrac;
+            
+            dst[y * dstPitch + x] = (unsigned char)interpolated;
+        }
+    }
+}
+
+// Nearest-neighbor scaling (faster, better for pixel art)
+static void manualScaleNearest(unsigned char* src, int srcW, int srcH, int srcPitch,
+                              unsigned char* dst, int dstW, int dstH, int dstPitch)
+{
+    LOGD("manualScaleNearest: %dx%d -> %dx%d\n", srcW, srcH, dstW, dstH);
+    
+    float scaleX = (float)srcW / dstW;
+    float scaleY = (float)srcH / dstH;
+    
+    for (int y = 0; y < dstH; y++) {
+        int srcY = (int)(y * scaleY);
+        if (srcY >= srcH) srcY = srcH - 1;
+        
+        unsigned char* srcRow = src + srcY * srcPitch;
+        unsigned char* dstRow = dst + y * dstPitch;
+        
+        for (int x = 0; x < dstW; x++) {
+            int srcX = (int)(x * scaleX);
+            if (srcX >= srcW) srcX = srcW - 1;
+            
+            dstRow[x] = srcRow[srcX];
+        }
+    }
+}
+
 // 0x479768
 static bool localMovieCallback()
 {
+    LOGD("localMovieCallback: running=%d\n", running);
     doSubtitle();
 
     if (movieCallback != NULL) {
@@ -998,23 +1166,25 @@ void movieSetVolume(int volume)
 // 0x4799F0
 void movieUpdate()
 {
+    LOGD("movieUpdate: running=%d, movieFlags=0x%x\n", running, movieFlags);
     if (!running) {
         return;
     }
 
     if ((movieFlags & MOVIE_EXTENDED_FLAG_0x02) != 0) {
-        debug_printf("Movie aborted\n");
+        LOGD("Movie aborted\n");
         cleanupMovie(1);
         return;
     }
 
     if ((movieFlags & MOVIE_EXTENDED_FLAG_0x01) != 0) {
-        debug_printf("Movie error\n");
+        LOGD("Movie error\n");
         cleanupMovie(1);
         return;
     }
 
     if (stepMovie() == -1) {
+        LOGD("Movie step failed, cleaning up\n");
         cleanupMovie(1);
         return;
     }
@@ -1023,6 +1193,7 @@ void movieUpdate()
         int frame;
         int dropped;
         _MVE_rmFrameCounts(&frame, &dropped);
+        LOGD("Movie update: frame=%d, dropped=%d\n", frame, dropped);
         updateCallbackFunc(frame);
     }
 }
