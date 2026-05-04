@@ -1,5 +1,11 @@
 # Fallout Community Edition
 
+> **About This Fork**: This fork focuses on modernizing the Android build:
+> - Updated Gradle plugin and Android SDK targets
+> - Updated SDL2 library to latest version
+> - Fullscreen scaling for interactive gameplay on high-resolution Android devices
+> - Fullscreen video playback support
+
 Fallout Community Edition is a fully working re-implementation of Fallout, with the same original gameplay, engine bugfixes, and some quality of life improvements, that works (mostly) hassle-free on multiple platforms.
 
 There is also [Fallout 2 Community Edition](https://github.com/alexbatalov/fallout2-ce).
