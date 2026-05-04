@@ -283,13 +283,13 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
     // Handle video scaling to fill the window
  LOGD("movie_MVE_ShowFrame: movieVideoScaleFlag=%d, movieScaleFlag=%d\n", movieVideoScaleFlag, movieScaleFlag);
  if (movieVideoScaleFlag) {
+ // Scale video to fill gSdlSurface (which will be scaled to full screen by renderPresent)
  LOGD("Setting up fullscreen scaling: gSdlSurface=%dx%d\n", gSdlSurface->w, gSdlSurface->h);
- // Scale video to fill the ENTIRE screen (0,0 to screen dimensions)
  destRect.x = 0;
  destRect.y = 0;
  destRect.w = gSdlSurface->w;
  destRect.h = gSdlSurface->h;
- LOGD("destRect set to fullscreen: x=%d, y=%d, w=%d, h=%d\n", destRect.x, destRect.y, destRect.w, destRect.h);
+ LOGD("destRect set to gSdlSurface: x=%d, y=%d, w=%d, h=%d\n", destRect.x, destRect.y, destRect.w, destRect.h);
  } else if (movieScaleFlag) {
         if ((movieFlags & MOVIE_EXTENDED_FLAG_0x08) != 0) {
             destRect.y = (winRect.lry - winRect.uly + 1 - destHeight) / 2;
@@ -372,11 +372,11 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
     }
     
     if (movieVideoScaleFlag) {
-        LOGD("Using manual scaling for video\n");
+        LOGD("Using manual scaling for video into gSdlSurface\n");
         LOGD("srcRect: x=%d, y=%d, w=%d, h=%d\n", srcRect.x, srcRect.y, srcRect.w, srcRect.h);
         LOGD("destRect: x=%d, y=%d, w=%d, h=%d\n", destRect.x, destRect.y, destRect.w, destRect.h);
         
-        // Scale directly into gSdlSurface using video's palette
+        // Scale directly into gSdlSurface (which will then be scaled to full screen by renderPresent)
         if (SDL_LockSurface(surface) == 0) {
             unsigned char* srcPixels = (unsigned char*)surface->pixels + srcRect.y * surface->pitch + srcRect.x;
             unsigned char* dstPixels = (unsigned char*)gSdlSurface->pixels + destRect.y * gSdlSurface->pitch + destRect.x;
@@ -409,11 +409,7 @@ static void movie_MVE_ShowFrame(SDL_Surface* surface, int srcWidth, int srcHeigh
             LOGD("SDL_BlitSurface error: %s\n", SDL_GetError());
         }
     }
-    LOGD("Copying gSdlSurface to gSdlTextureSurface\n");
-    // Blit entire gSdlSurface to texture (no src rect = entire surface)
-    SDL_Rect fullDest = {0, 0, gSdlSurface->w, gSdlSurface->h};
-    SDL_BlitSurface(gSdlSurface, NULL, gSdlTextureSurface, &fullDest);
-    LOGD("Calling renderPresent()\n");
+    LOGD("Calling renderPresent() for video\n");
     renderPresent();
 }
 
