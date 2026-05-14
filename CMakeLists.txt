@@ -38,6 +38,10 @@ if(UBSAN)
     target_link_options(${EXECUTABLE_NAME} PUBLIC "-fsanitize=undefined")
 endif()
 
+if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+    target_compile_definitions(${EXECUTABLE_NAME} PRIVATE NDEBUG)
+endif()
+
 target_include_directories(${EXECUTABLE_NAME} PUBLIC src)
 
 target_sources(${EXECUTABLE_NAME} PUBLIC

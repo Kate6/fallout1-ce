@@ -1,10 +1,14 @@
 #include "plib/gnw/svga.h"
 
+#ifndef NDEBUG
 #ifdef __ANDROID__
 #include <android/log.h>
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, "FALLOUT", __VA_ARGS__)
 #else
 #define LOGD(...) printf(__VA_ARGS__)
+#endif
+#else
+#define LOGD(...) ((void)0)
 #endif
 
 #include "plib/gnw/debug.h"

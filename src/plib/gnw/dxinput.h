@@ -29,6 +29,7 @@ bool dxinput_flush_keyboard_buffer();
 bool dxinput_read_keyboard_buffer(KeyboardData* keyboardData);
 
 void handleMouseEvent(SDL_Event* event);
+void dxinput_toggle_mouse_mode();
 
 } // namespace fallout
 

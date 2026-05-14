@@ -10,6 +10,8 @@ static void dxinput_keyboard_exit();
 static int gMouseWheelDeltaX = 0;
 static int gMouseWheelDeltaY = 0;
 
+static bool gMouseRelativeMode = true;
+
 // 0x4E0400
 bool dxinput_init()
 {
@@ -109,6 +111,19 @@ bool dxinput_mouse_init()
 // 0x4E078C
 void dxinput_mouse_exit()
 {
+}
+
+// 0x4E0790
+void dxinput_toggle_mouse_mode()
+{
+    gMouseRelativeMode = !gMouseRelativeMode;
+    if (gMouseRelativeMode) {
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+        SDL_ShowCursor(SDL_DISABLE);
+    } else {
+        SDL_SetRelativeMouseMode(SDL_FALSE);
+        SDL_ShowCursor(SDL_ENABLE);
+    }
 }
 
 // 0x4E07B8

@@ -53,6 +53,7 @@
 #include "plib/gnw/gnw.h"
 #include "plib/gnw/grbuf.h"
 #include "plib/gnw/input.h"
+#include "plib/gnw/dxinput.h"
 #include "plib/gnw/memory.h"
 #include "plib/gnw/svga.h"
 #include "plib/gnw/text.h"
@@ -524,6 +525,11 @@ int game_handle_input(int eventCode, bool isInCombatMode)
         game_quit_with_confirm();
         break;
     case KEY_TAB:
+        if (keys[SDL_SCANCODE_LSHIFT] != KEY_STATE_UP
+            || keys[SDL_SCANCODE_RSHIFT] != KEY_STATE_UP) {
+            dxinput_toggle_mouse_mode();
+            break;
+        }
         if (intface_is_enabled()
             && keys[SDL_SCANCODE_LALT] == 0
             && keys[SDL_SCANCODE_RALT] == 0) {
